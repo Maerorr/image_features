@@ -28,7 +28,7 @@ fn main() {
     // println!("calculating noisyness... (1 = max noise, 0 = no noise)");
     //
     // println!("calculated noisyness of color noise: {}", normalize_value(measure_rms_noise(&color_noise_pixels, 3), 0.0, 0.5));
-    println!("calculated noisyness of mono noise: {}", normalize_value(measure_rms_noise(&mono_noise_pixels, 3), 0.0, 0.5));
+    //println!("calculated noisyness of mono noise: {}", normalize_value(measure_rms_noise(&mono_noise_pixels, 3), 0.0, 0.5));
     // println!("calculated noisyness of flat: {}", normalize_value(measure_rms_noise(&flat_pixels, 3), 0.0, 0.5));
     println!("calculated noisyness of modular: {}", normalize_value(measure_rms_noise(&modular_pixels, 50), 0.0, 0.5));
     println!("calculated noisyness of mountains: {}", normalize_value(measure_rms_noise(&mountains_pixels, 50), 0.0, 0.5));

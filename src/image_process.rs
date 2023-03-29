@@ -14,28 +14,51 @@ pub fn rgb_image_to_2d_vec(pixels: &image::RgbImage) -> Vec<Vec<Rgb<u8>>> {
 }
 
 pub fn image_pixel_standard_deviation(pixels: &image::Rgb32FImage) -> f32 {
-    let mut output = 0.0;
-    let mut count = 0;
+    // let mut output = 0.0;
+    // let mut count = 0;
+    // let (width, height) = pixels.dimensions();
+    //
+    // for x in 0..(width - 2) {
+    //     for y in 0..(height - 2) {
+    //
+    //         let mut sum = 0.0;
+    //         for i in 0..3 {
+    //             for j in 0..3 {
+    //                 let pix = pixels.get_pixel(x + i, y + j);
+    //                 sum += (pix[0] + pix[1] + pix[2]) / 3.0;
+    //             }
+    //         }
+    //
+    //         output += sum / 9.0;
+    //         count += 1;
+    //     }
+    // }
+    //
+    // output /= (count) as f32;
+    // output
+
+    let mut std_dev = 0.0;
+    let mut avg = 0.0;
     let (width, height) = pixels.dimensions();
 
-    for x in 0..(width - 2) {
-        for y in 0..(height - 2) {
+    for x in 0..width {
+        for y in 0..height {
+            let pix = pixels.get_pixel(x, y);
+            avg += (pix[0] + pix[1] + pix[2]) / 3.0;
+        }
+    }
+    avg /= (width * height) as f32;
 
-            let mut sum = 0.0;
-            for i in 0..3 {
-                for j in 0..3 {
-                    let pix = pixels.get_pixel(x + i, y + j);
-                    sum += (pix[0] + pix[1] + pix[2]) / 3.0;
-                }
-            }
-
-            output += sum / 9.0;
-            count += 1;
+    for x in 0..width {
+        for y in 0..height {
+            let pix = pixels.get_pixel(x, y);
+            std_dev += (avg - ((pix[0] + pix[1] + pix[2]) / 3.0)).powi(2);
         }
     }
 
-    output /= (count) as f32;
-    output
+    std_dev /= (width * height) as f32;
+    std_dev = std_dev.sqrt();
+    std_dev
 }
 
 // this measures the RMS Noise level of an image using standard deviation of 3x3 matrices of pixels
@@ -100,6 +123,18 @@ pub fn sobel_convolution(pixels: &image::Rgb32FImage) -> image::Rgb32FImage {
                     sum_y += ((pix[0] + pix[1] + pix[2]) / 3.0) * SOBEL_Y[i as usize][j as usize];
                 }
             }
+            //sum_x = sum_x.abs();
+            //sum_y = sum_y.abs();
+            if sum_x < 0.0 {
+                sum_x = 0.0;
+            }
+
+            if sum_y < 0.0 {
+                sum_y = 0.0;
+            }
+
+            sum_x = sum_x.powi(2);
+            sum_y = sum_y.powi(2);
 
             let sum = (sum_x.powi(2) + sum_y.powi(2)).sqrt();
             let pix = Rgb::<f32>([sum, sum, sum]);

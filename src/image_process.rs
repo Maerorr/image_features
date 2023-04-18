@@ -1,7 +1,7 @@
 use std::f32::consts::{E, PI};
-use image::{Pixel, Rgb};
+use image::{GrayImage, Pixel, Rgb};
 use num::complex::ComplexFloat;
-use crate::utils::{_2d_array_to_vec, matrix_multiply, SOBEL_X, SOBEL_Y};
+use crate::utils::{_2d_array_to_vec, GAUSS_SMOOTH, matrix_multiply, SOBEL_X, SOBEL_Y};
 
 pub fn rgb_image_to_2d_vec(pixels: &image::RgbImage) -> Vec<Vec<Rgb<u8>>> {
     let mut out: Vec<Vec<Rgb<u8>>> = Vec::new();
@@ -95,3 +95,18 @@ pub fn apply_fuzzy_threshold(pixels: &image::Rgb32FImage, t_low: f32, t_high: f3
     vec![level1, level2, level3]
 }
 
+pub fn edge_pixels_ratio(pixels: GrayImage) -> f32 {
+    let mut white = 0;
+    let (width, height) = pixels.dimensions();
+
+    for x in 0..width {
+        for y in 0..height {
+            let pix = pixels.get_pixel(x, y);
+            if pix[0] > 245 {
+                white += 1;
+            }
+        }
+    }
+
+    white as f32 / (pixels.width() * pixels.height()) as f32
+}

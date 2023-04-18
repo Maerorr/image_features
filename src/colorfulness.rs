@@ -116,6 +116,8 @@ pub fn mean_of_chroma(image: &Vec<Vec<LabPixel>>) -> f32 {
 
 // this returns the colorfulness metrics one and three from table one from:
 // https://www.researchgate.net/publication/243135534_Measuring_Colourfulness_in_Natural_Images
+// metric one is standard deviations of a and b in CIELAB color space + the mean of Chroma
+// metric two is the trigonometric len between standard deviations of a and b + the mean of chroma
 pub fn colorfulness_metrics_1(image: &Vec<Vec<LabPixel>>) -> (f32, f32) {
     let mut output_1 = 0.0f32;
     let mut output_3 = 0.0f32;

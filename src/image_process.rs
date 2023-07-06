@@ -1,7 +1,6 @@
-use std::f32::consts::{E, PI};
-use image::{GrayImage, Pixel, Rgb};
-use num::complex::ComplexFloat;
-use crate::utils::{_2d_array_to_vec, GAUSS_SMOOTH, matrix_multiply, SOBEL_X, SOBEL_Y};
+use std::{f32::consts::{E, PI}};
+use image::{GrayImage, Pixel, Rgb, Luma};
+use crate::utils::{_2d_array_to_vec, GAUSS_SMOOTH, matrix_multiply, SOBEL_X, SOBEL_Y, DIR_MAT_Y, DIR_MAT_X};
 
 pub fn rgb_image_to_2d_vec(pixels: &image::RgbImage) -> Vec<Vec<Rgb<u8>>> {
     let mut out: Vec<Vec<Rgb<u8>>> = Vec::new();
@@ -109,4 +108,158 @@ pub fn edge_pixels_ratio(pixels: GrayImage) -> f32 {
     }
 
     white as f32 / (pixels.width() * pixels.height()) as f32
+}
+
+// see https://ieeexplore.ieee.org/document/4309999
+// page 6. Equation 1.
+// 'size' is the size of the neighborhood calculated as 2^k
+pub fn neighborhood_average(pixels: &Vec<Vec<u8>>, x: i32, y: i32, size: u32) -> f32 {
+    let mut out = 0.0f32;
+    let (width, height) = (pixels.len(), pixels[0].len());
+    for i in (x - 2i32.pow(size - 1))..(x + 2i32.pow(size - 1) - 1) {
+        for j in (y - 2i32.pow(size - 1))..(y + 2i32.pow(size - 1) - 1) {
+            // not a word has been said about going out of bounds in the paper but let's assume that it counts as 0
+            if i < 0 || j < 0  || i >= width as i32 || j >= height as i32 {
+                continue;
+            }
+            out += pixels[i as usize][j as usize] as f32;
+        }
+    }
+    out / 2u32.pow(2 * size) as f32
+}
+
+// see https://ieeexplore.ieee.org/document/4309999
+// page 6. Equation 2, 3 and 4.
+// 'size' is the size of the neighborhood calculated as 2^k
+pub fn s_best(pixels: &Vec<Vec<u8>>, x: i32, y: i32) -> u32 {
+    let mut e_vec: Vec<(f32, u8)> = Vec::new();
+    for size in 1..5 {
+        let e_1 = neighborhood_average(pixels, x + 2i32.pow(size - 1), y, size);
+        let e_2 = neighborhood_average(pixels, x - 2i32.pow(size - 1), y, size);
+        e_vec.push(((e_1 - e_2).abs(), size as u8));
+    }
+
+    // pick best and save the size
+    let mut best = e_vec[0];
+    for e in e_vec {
+        if e.0 < best.0 {
+            best = e;
+        }
+    }
+
+    best.1 as u32
+}
+
+pub fn coarseness(pixels: &GrayImage) -> f32 {
+    let mut out = 0.0f32;
+    let (width, height) = pixels.dimensions();
+
+    // todo get a vec of pixels to avoid using get_pixels
+    let mut pixels_vec: Vec<Vec<u8>> = Vec::new();
+
+    for i in 0..width {
+        let mut row: Vec<u8> = Vec::new();
+        for j in 0..height {
+            row.push(pixels[(i, j)][0]);
+        }
+        pixels_vec.push(row);
+    }
+
+    for i in 0..width {
+        for j in 0..height {
+            let s_best = s_best(&pixels_vec, i as i32, j as i32);
+            out += s_best as f32;
+        }
+    }
+
+    out / (width * height) as f32
+}
+
+// DIRECTIONALITY
+
+// page 8 first equation on the right
+pub fn quantized_peaks(vec: &Vec<f32>, n: i32) -> Vec<f32> {
+    let mut divisor: f32 = 0.0;
+    // calculating the divisor that will be reused for all peaks
+    for k in 0..(n - 1) {
+        for val in vec.iter() {
+            if *val >= (2.0 * (k as f32) - 1.0) * 2.0 * (n as f32) && 
+            *val < (2.0 * (k as f32) + 1.0) * 2.0 * (n as f32) {
+                divisor += 1.0;
+            }
+        }
+    }
+
+    let mut histogram = vec![0.0; n as usize];
+    for k in 0..(n - 1) {
+        let mut count = 0;
+        for val in vec.iter() {
+            if *val >= (2.0 * (k as f32) - 1.0) *  PI / (2.0 * (n as f32)) && 
+            *val < (2.0 * (k as f32) + 1.0) *  PI / (2.0 * (n as f32)) {
+                count += 1;
+            }
+        }
+        histogram[k as usize] = count as f32 / divisor;
+    }
+
+    // print out the histogram
+    for i in 0..n {
+        println!("{}: {}", i, histogram[i as usize]);
+    }
+
+    histogram
+}
+
+pub fn directionality(pixels: &GrayImage, threshold: f32) -> GrayImage {
+    // calculate direction of edge at each pixel
+    let mut out = 0.0f32;
+    let (width, height) = pixels.dimensions();
+
+    // todo get a vec of pixels to avoid using get_pixels
+    let mut pixels_vec: Vec<Vec<u8>> = Vec::new();
+    let mut angles: Vec<f32> = Vec::new();
+    let mut image_out = GrayImage::new(width, height);
+
+    for i in 0..width {
+        let mut row: Vec<u8> = Vec::new();
+        for j in 0..height {
+            row.push(pixels[(i, j)][0]);
+        }
+        pixels_vec.push(row);
+    }
+
+    // convolution
+    for x in 0..(width - 2) {
+        for y in 0..(height - 2) {
+            let mut sum_x = 0.0;
+            let mut sum_y = 0.0;
+
+            for i in 0..3 {
+                for j in 0..3 {
+                    sum_x += pixels_vec[(x + i) as usize][(y + j) as usize] as f32 * DIR_MAT_X[i as usize][j as usize];
+                    sum_y += pixels_vec[(x + i) as usize][(y + j) as usize] as f32 * DIR_MAT_Y[i as usize][j as usize];
+                }
+            }
+
+            sum_x = sum_x.abs();
+            sum_y = sum_y.abs();
+
+            let pixel_val = (sum_x.powf(2.0) + sum_y.powf(2.0)).sqrt();
+            image_out.put_pixel(x, y, Luma([pixel_val as u8]));
+
+            // thats what i assume was meant by thresholding so that we dont count insignificant data
+            if sum_x < threshold && sum_y < threshold {
+                continue;
+            }
+
+            let arg = sum_y / sum_x;
+
+            let angle = arg.atan() + PI / 2.0;
+            angles.push(angle);
+        }
+    }
+
+    quantized_peaks(&angles, 16);
+
+    image_out
 }

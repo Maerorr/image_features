@@ -90,9 +90,6 @@ pub fn rgb_to_lab_image(image: &Rgb32FImage) -> Vec<Vec<LabPixel>> {
         for (j, pixel) in row.enumerate() {
             let rgb = pixel.0;
             let lab = rgb_to_lab(rgb[0], rgb[1], rgb[2]);
-            if (lab.l < 0.1 && lab.a < 0.1 && lab.b < 0.1) {
-                println!("(i {}, j{}): [r{}, g{}, b{}] -> ({} {} {})", i,j,rgb[0], rgb[1], rgb[2],lab.l, lab.a, lab.b);
-            }
             row_vec.push(lab);
         }
         output.push(row_vec);
@@ -118,7 +115,7 @@ pub fn mean_of_chroma(image: &Vec<Vec<LabPixel>>) -> f32 {
 // https://www.researchgate.net/publication/243135534_Measuring_Colourfulness_in_Natural_Images
 // metric one is standard deviations of a and b in CIELAB color space + the mean of Chroma
 // metric two is the trigonometric len between standard deviations of a and b + the mean of chroma
-pub fn colorfulness_metrics_1(image: &Vec<Vec<LabPixel>>) -> (f32, f32) {
+pub fn colorfulness_metrics_1_3(image: &Vec<Vec<LabPixel>>) -> (f32, f32) {
     let mut output_1 = 0.0f32;
     let mut output_3 = 0.0f32;
     let mean_of_chroma = mean_of_chroma(image);
@@ -155,8 +152,7 @@ pub fn lab_saturation(lab: &LabPixel) -> f32 {
         return 0.0;
     }
     let c = chroma(lab);
-    let s = c / lab.l;
-    s
+    c / lab.l
 }
 
 // calculates colorfulness metric three from table 1 from:

@@ -11,7 +11,7 @@ use crate::image_process::{coarseness, edge_pixels_ratio, sobel_convolution};
 use crate::utils::{normalize_value, save_to_image, save_to_image_f32};
 
 fn main() {
-    let image = ImageReader::open("res/bro.png").unwrap().decode().unwrap();
+    let image = ImageReader::open("res/urban.jpg").unwrap().decode().unwrap();
 
     let image_f32 = image.to_rgb32f();
 
@@ -54,15 +54,15 @@ fn main() {
     
     // urban_blurred.save("res/output/urban_blurred.png").unwrap();
     
-    let edged = imageproc::edges::canny(&image_grayscale, 1.0, 27.0);
+    //let edged = imageproc::edges::canny(&image_grayscale, 1.0, 27.0);
     
     // let urban_edge_density = edge_pixels_ratio(urban_edged);
     
     // println!("\n------- Edge Density -------");
     // println!("urban edge density: {}", urban_edge_density);
 
-    let dir = directionality(&image_grayscale, 0.12);
-    
-    dir.save("res/output/directionality_test.png").unwrap();
+    let dir = directionality(&image_grayscale, 0.12, 16);
+    print!("dir: {}", dir);
+
 
 }

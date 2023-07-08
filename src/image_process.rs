@@ -1,5 +1,6 @@
-use std::{f32::consts::{E, PI}};
+use std::{f32::consts::{E, PI}, iter::Map, collections::HashMap};
 use image::{GrayImage, Pixel, Rgb, Luma};
+use num::integer::Roots;
 use crate::utils::{_2d_array_to_vec, GAUSS_SMOOTH, matrix_multiply, SOBEL_X, SOBEL_Y, DIR_MAT_Y, DIR_MAT_X};
 
 pub fn rgb_image_to_2d_vec(pixels: &image::RgbImage) -> Vec<Vec<Rgb<u8>>> {
@@ -202,15 +203,121 @@ pub fn quantized_peaks(vec: &Vec<f32>, n: i32) -> Vec<f32> {
         histogram[k as usize] = count as f32 / divisor;
     }
 
-    // print out the histogram
-    for i in 0..n {
-        println!("{}: {}", i, histogram[i as usize]);
+    // print
+    for i in 0..histogram.len() {
+        println!("{}: {}", i, histogram[i]);
     }
 
     histogram
 }
 
-pub fn directionality(pixels: &GrayImage, threshold: f32) -> GrayImage {
+#[derive(Clone, Copy)]
+struct Peak {
+    value: f32,
+    idx: i32,
+    range: (i32, i32)
+}
+
+fn find_peaks(vec: &Vec<f32>) -> Vec<Peak> {
+    let mut idx_vec: Vec<i32> = Vec::new();
+    for i in 0..vec.len() {
+        idx_vec.push(i as i32);
+    }
+
+    // sort the idx_vec by the values in vec
+    idx_vec.sort_by(|a, b| vec[*a as usize].partial_cmp(&vec[*b as usize]).unwrap());
+
+    let mut out: Vec<Peak> = Vec::new();
+    let mut peak1 = Peak {value: vec[idx_vec[idx_vec.len() - 1] as usize], idx: *idx_vec.last().unwrap(), range: (0, 0)};
+    let mut peak2 = Peak {value: vec[idx_vec[idx_vec.len() - 2] as usize], idx: idx_vec[idx_vec.len() - 2], range: (0, 0)};
+
+    // here we gather data about the peaks and range of the peaks
+    if peak1.idx < peak2.idx {
+        for i in (0..peak1.idx).rev() {
+            if i == 0 {
+                peak1.range.0 = 0;
+                break;
+            }
+            if vec[(i - 1) as usize] > vec[i as usize] || vec[(i - 1) as usize] == vec[i as usize]{
+                peak1.range.0 = i;
+                break;
+            }
+        }
+        for i in peak1.idx..peak2.idx {
+            if vec[(i + 1) as usize] > vec[i as usize] || vec[(i + 1) as usize] == vec[i as usize] {
+                peak1.range.1 = i;
+                break;
+            }
+        }
+
+        for i in (0..peak2.idx).rev() {
+            if vec[(i - 1) as usize] > vec[i as usize] || vec[(i - 1) as usize] == vec[i as usize] {
+                peak2.range.0 = i;
+                break;
+            }
+        }
+        for i in peak2.idx..(idx_vec.len() as i32) {
+            if i == (idx_vec.len() - 1) as i32 {
+                peak2.range.1 = (idx_vec.len() - 1) as i32;
+                break;
+            }
+            if vec[(i + 1) as usize] > vec[i as usize] || vec[(i + 1) as usize] == vec[i as usize] {
+                peak2.range.1 = i;
+                break;
+            }
+        }
+    } else {
+        for i in (0..peak2.idx).rev() {
+            if i == 0 {
+                peak2.range.0 = 0;
+                break;
+            }
+            if vec[(i - 1) as usize] > vec[i as usize] || vec[(i - 1) as usize] == vec[i as usize] {
+                peak2.range.0 = i;
+                break;
+            }
+        }
+        for i in peak2.idx..peak1.idx {
+            if vec[(i + 1) as usize] > vec[i as usize] || vec[(i + 1) as usize] == vec[i as usize] {
+                peak2.range.1 = i;
+                break;
+            }
+        }
+
+        for i in (0..peak1.idx).rev() {
+            if vec[(i - 1) as usize] > vec[i as usize] || vec[(i - 1) as usize] == vec[i as usize] {
+                peak1.range.0 = i;
+                break;
+            }
+        }
+        for i in peak1.idx..(idx_vec.len() as i32) {
+            if i == (idx_vec.len() - 1) as i32 {
+                peak1.range.1 = (idx_vec.len() - 1) as i32;
+                break;
+            }
+            if vec[(i + 1) as usize] > vec[i as usize] || vec[(i + 1) as usize] == vec[i as usize] {
+                peak1.range.1 = i;
+                break;
+            }
+        }
+    }
+    out.push(peak1.clone());
+    // cheack if we should consider the second peak at all
+    if vec[peak2.range.0 as usize] / peak2.value < 0.5 && vec[peak2.range.1 as usize] / peak2.value < 0.5 {
+        if peak2.value / peak1.value > 0.2 {
+            out.push(peak2);
+        } 
+    }
+
+    //print
+    for i in 0..out.len() {
+        println!("peak {}: value: {}, idx: {}, range: {:?}", i, out[i].value, out[i].idx, out[i].range);
+    }
+
+    out
+}
+
+pub fn directionality(pixels: &GrayImage, threshold: f32, n: i32) -> f32 {
     // calculate direction of edge at each pixel
     let mut out = 0.0f32;
     let (width, height) = pixels.dimensions();
@@ -259,7 +366,24 @@ pub fn directionality(pixels: &GrayImage, threshold: f32) -> GrayImage {
         }
     }
 
-    quantized_peaks(&angles, 16);
+    let hd = quantized_peaks(&angles, n);
+    let peaks = find_peaks(&hd);
 
-    image_out
+    // the following calculations are slightly altered from the original paper.
+    // 1. some values i simply did not understen the meaning or purpose of
+    // 2. the leading '1 - ' makes no sense since higher directionality should meam values closer to 1 not the other way
+    
+    // the way it works now is that 
+    let mut temp = 0.0;
+    for i in 0..peaks.len() {
+        let range_len = peaks[i].range.1 - peaks[i].range.0;
+        for j in peaks[i].range.0..(peaks[i].range.1 + 1) {
+            temp += (j - peaks[i].idx).pow(2) as f32 * peaks[i].value / range_len as f32;
+        }
+        
+    }
+
+    out = peaks.len() as f32 * temp;
+
+    out
 }
